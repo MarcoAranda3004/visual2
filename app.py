@@ -16,7 +16,7 @@ st.set_page_config(
 st.title(" Predicción de Precios de Frutas")
 
 # Rutas especificadas por el usuario
-CSV_DIR = r"E:\visual\csv"
+CSV_DIR = "csv"
 
 # Diccionarios de meses para control cronológico y traducción
 MESES_ESPANOL = {
