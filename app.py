@@ -18,7 +18,7 @@ st.set_page_config(
 st.title("📊 Predicción de Precios de Frutas y Verduras")
 
 # Rutas especificadas por el usuario
-CSV_DIR = r"E:\visual\csv"
+CSV_DIR = "csv"
 
 MESES_NUMERO = {
     "Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6,
