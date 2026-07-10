@@ -76,20 +76,25 @@ def mostrar_admin():
                 # Ruta del archivo viejo/actual
                 ruta_destino = os.path.join(CSV_DIR, nombre_real_archivo)
 
-                # 2. Botón de confirmación para fusionar
+               # 2. Botón de confirmación para fusionar
                 if st.button(f"Confirmar y Combinar Datos", type="primary"):
                     
                     if os.path.exists(ruta_destino):
                         # Leer el archivo histórico actual
                         df_historico = pd.read_csv(ruta_destino)
                         
-                        # Unir el histórico con lo nuevo (uno abajo del otro)
+                        # =======================================================
+                        # ¡LA SOLUCIÓN!: Forzamos a que ambos tengan el mismo formato de columnas
+                        # =======================================================
+                        df_historico.columns = df_historico.columns.str.strip().str.title()
+                        df_nuevas_filas.columns = df_nuevas_filas.columns.str.strip().str.title()
+                        
+                        # Unir el histórico con lo nuevo
                         df_final = pd.concat([df_historico, df_nuevas_filas], ignore_index=True)
                         
-                        # Limpieza inteligente: Elimina filas idénticas duplicadas si subes lo mismo por error
+                        # Limpieza inteligente: Elimina filas idénticas duplicadas
                         df_final = df_final.drop_duplicates()
                     else:
-                        # Si por algún motivo el archivo no existía antes, lo crea con lo subido
                         df_final = df_nuevas_filas
                     
                     # Guardar el archivo combinado final en la carpeta
@@ -99,7 +104,6 @@ def mostrar_admin():
                     st.cache_data.clear()
                     st.cache_resource.clear()
                     
-                    st.success(f"✅ ¡Datos añadidos con éxito! Ahora tienes un total de {len(df_final)} registros en `{nombre_real_archivo}`. Las cachés se limpiaron correctamente.")
-                    
+                    st.success(f"✅ ¡Datos añadidos y normalizados con éxito! Las cachés se limpiaron correctamente. Regresa al Dashboard.")
             except Exception as e:
                 st.error(f"❌ Error al fusionar el archivo CSV: {str(e)}")
