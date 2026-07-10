@@ -84,15 +84,41 @@ def mostrar_admin():
                         df_historico = pd.read_csv(ruta_destino)
                         
                         # =======================================================
-                        # ¡LA SOLUCIÓN!: Forzamos a que ambos tengan el mismo formato de columnas
+                        # 1. Alineamos las columnas en minúsculas para app.py
                         # =======================================================
-                        df_historico.columns = df_historico.columns.str.strip().str.title()
-                        df_nuevas_filas.columns = df_nuevas_filas.columns.str.strip().str.title()
+                        df_historico.columns = df_historico.columns.str.strip().str.lower()
+                        df_nuevas_filas.columns = df_nuevas_filas.columns.str.strip().str.lower()
+                        
+                        # =======================================================
+                        # 2. Normalizar nombres de productos (Sin tildes y en mayúsculas)
+                        # =======================================================
+                        for df_temporal in [df_historico, df_nuevas_filas]:
+                            col_prod = [c for c in df_temporal.columns if 'producto' in c or 'item' in c]
+                            if col_prod:
+                                df_temporal[col_prod[0]] = df_temporal[col_prod[0]].astype(str).str.strip().str.upper()
+                                df_temporal[col_prod[0]] = (df_temporal[col_prod[0]]
+                                                            .str.replace('Á', 'A')
+                                                            .str.replace('É', 'E')
+                                                            .str.replace('Í', 'I')
+                                                            .str.replace('Ó', 'O')
+                                                            .str.replace('Ú', 'U'))
                         
                         # Unir el histórico con lo nuevo
                         df_final = pd.concat([df_historico, df_nuevas_filas], ignore_index=True)
                         
-                        # Limpieza inteligente: Elimina filas idénticas duplicadas
+                        # =======================================================
+                        # 3. ¡LA CURA CRUCIAL!: Ordenar cronológicamente para mantener el look_back
+                        # =======================================================
+                        col_fecha = [c for c in df_final.columns if 'fech' in c or 'date' in c or c == 'f']
+                        if col_fecha:
+                            df_final[col_fecha[0]] = pd.to_datetime(df_final[col_fecha[0]], errors='coerce')
+                            # Eliminamos nulos en fecha antes de ordenar
+                            df_final = df_final.dropna(subset=[col_fecha[0]])
+                            # Ordenamos para que las filas nuevas se mezclen bien en el tiempo
+                            df_final = df_final.sort_values(by=col_fecha[0]).reset_index(drop=True)
+                            df_final[col_fecha[0]] = df_final[col_fecha[0]].dt.strftime('%Y-%m-%d')
+
+                        # Elimina filas idénticas duplicadas
                         df_final = df_final.drop_duplicates()
                     else:
                         df_final = df_nuevas_filas
@@ -100,10 +126,10 @@ def mostrar_admin():
                     # Guardar el archivo combinado final en la carpeta
                     df_final.to_csv(ruta_destino, index=False)
                     
-                    # 3. Limpiamos las cachés de Streamlit de inmediato para actualizar los gráficos
+                    # Limpiamos las cachés de Streamlit
                     st.cache_data.clear()
                     st.cache_resource.clear()
                     
-                    st.success(f"✅ ¡Datos añadidos y normalizados con éxito! Las cachés se limpiaron correctamente. Regresa al Dashboard.")
+                    st.success(f"✅ ¡Datos añadidos, ordenados cronológicamente y normalizados! Regresa al Dashboard.")
             except Exception as e:
                 st.error(f"❌ Error al fusionar el archivo CSV: {str(e)}")

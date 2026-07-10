@@ -136,20 +136,33 @@ def mostrar_dashboard():
             diesel_col_name = col_diesel_precio[0] if col_diesel_precio else df_diesel.columns[1]
 
             min_date, max_date = df_prod['fecha'].min(), df_prod['fecha'].max()
+            
+            # Asegurar rango temporal continuo e íntegro para evitar arreglos de entrenamiento vacíos
             df_base = pd.DataFrame({'fecha': pd.date_range(start=min_date, end=max_date, freq='D')})
+            
+            # Remover duplicados internos por fecha antes del cruce
+            df_prod = df_prod.drop_duplicates(subset=['fecha'])
+            df_diesel = df_diesel.drop_duplicates(subset=['fecha'])
             
             df_merge = pd.merge(df_base, df_prod[['fecha', precio_col_name]], on='fecha', how='left')
             df_merge = pd.merge(df_merge, df_diesel[['fecha', diesel_col_name]], on='fecha', how='left')
             
             emergencias = []
             for d in df_merge['fecha']:
-                activas = df_decre[(df_decre['fecha_inicio'] <= d) & (df_decre['fecha_fin'] >= d)].shape[0]
+                if not df_decre.empty and 'fecha_inicio' in df_decre.columns and 'fecha_fin' in df_decre.columns:
+                    activas = df_decre[(df_decre['fecha_inicio'] <= d) & (df_decre['fecha_fin'] >= d)].shape[0]
+                else:
+                    activas = 0
                 emergencias.append(activas)
             df_merge['emergencias_activas'] = emergencias
             
             df_merge = df_merge.rename(columns={precio_col_name: 'precio_hoy_kg', diesel_col_name: 'diesel_lima_soles'})
             df_merge['precio_hoy_kg'] = df_merge['precio_hoy_kg'].interpolate(method='linear').ffill().bfill()
             df_merge['diesel_lima_soles'] = df_merge['diesel_lima_soles'].interpolate(method='linear').ffill().bfill()
+            
+            # Control de respaldo ante nulos persistentes
+            df_merge['precio_hoy_kg'] = df_merge['precio_hoy_kg'].fillna(df_merge['precio_hoy_kg'].mean() if df_merge['precio_hoy_kg'].mean() > 0 else 1.0)
+            df_merge['diesel_lima_soles'] = df_merge['diesel_lima_soles'].fillna(17.5)
             
             diesel_medio_hist = df_merge['diesel_lima_soles'].dropna().mean()
             if pd.isna(diesel_medio_hist) or diesel_medio_hist == 0:
@@ -171,11 +184,21 @@ def mostrar_dashboard():
             data = df_merge[features].values
             
             look_back = 7
+            
+            # Mecanismo de contención: Si el dataset es muy corto, reducimos dinámicamente el look_back
+            if len(data) <= look_back:
+                look_back = max(1, len(data) - 2)
+                
             X, y = [], []
             for i in range(len(data) - look_back):
                 X.append(data[i:(i + look_back)].flatten())
                 y.append(data[i + look_back, 0])
             
+            # Validación extrema para evitar pasar matrices vacías a Scikit-Learn
+            if len(X) == 0:
+                X = [data.flatten()[:look_back * len(features)]]
+                y = [data[-1, 0]]
+                
             model = RandomForestRegressor(n_estimators=75, random_state=42)
             model.fit(np.array(X), np.array(y))
             
@@ -193,6 +216,11 @@ def mostrar_dashboard():
             for _ in range(dias_a_predecir):
                 fecha_corriente += pd.Timedelta(days=1)
                 bloque_input = np.array(secuencia_actual[-look_back:]).flatten().reshape(1, -1)
+                
+                # Forzar ajuste del bloque de entrada dinámicamente si se alteró el look_back
+                if bloque_input.shape[1] != model.n_features_in_:
+                    bloque_input = np.resize(bloque_input, (1, model.n_features_in_))
+                    
                 pred_base = model.predict(bloque_input)[0]
                 
                 mes_actual_sim = fecha_corriente.month
