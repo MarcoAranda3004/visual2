@@ -169,3 +169,4 @@ def mostrar_admin():
                         st.success("✅ ¡Éxito! Datos inyectados.")
             except Exception as e:
                 st.error(f"❌ Error crítico: {str(e)}")
+                ##nota
